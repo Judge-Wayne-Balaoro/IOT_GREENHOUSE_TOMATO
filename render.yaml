@@ -1,6 +1,7 @@
 services:
   - type: web
     name: tomato-greenhouse-api
+    plan: free
     runtime: python
     rootDir: tomato_greenhouse_backend
     buildCommand: pip install -r requirements.txt
