@@ -614,7 +614,6 @@ def post_json(path,data):
             if API_USE_TLS:
                 # Use SNI so multi-tenant HTTPS hosts can select the right certificate.
                 sock=ssl.wrap_socket(sock, server_hostname=API_HOST)
-                sock.settimeout(15)
             # Send the full request even if socket.send transmits only a portion.
             offset=0
             while offset<len(request):
