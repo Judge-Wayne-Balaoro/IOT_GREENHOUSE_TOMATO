@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: tomato-greenhouse-api
+    runtime: python
+    rootDir: tomato_greenhouse_backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && python seed_initial_data.py && uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: AUTH_SECRET
+        sync: false
+      - key: DEVICE_API_KEY
+        sync: false
+      - key: FRONTEND_ORIGINS
+        sync: false

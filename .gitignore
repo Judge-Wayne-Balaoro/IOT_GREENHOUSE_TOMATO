@@ -1,0 +1,10 @@
+# Secrets and runtime files
+.env
+**/.env
+**/greenhouse_secrets.py
+**/__pycache__/
+*.py[cod]
+.venv/
+venv/
+.idea/
+.DS_Store
