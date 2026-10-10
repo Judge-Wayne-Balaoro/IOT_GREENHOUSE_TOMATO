@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sign in - Tomato Greenhouse</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<button class="btn corner" id="themeBtn" type="button">Theme</button>
+<main class="auth">
+  <div class="panel auth-card">
+    <h1>Tomato Greenhouse</h1>
+    <div class="sub">Sign in to view your greenhouse.</div>
+
+    <form id="form" novalidate>
+      <label>Username
+        <input type="text" id="user" autocomplete="username" required autofocus>
+      </label>
+      <label>Password
+        <div class="pw">
+          <input type="password" id="pass" autocomplete="current-password" required>
+          <button class="btn" type="button" id="toggle" aria-label="Show password">Show</button>
+        </div>
+      </label>
+      <label class="check"><input type="checkbox" id="remember"> Keep me signed in</label>
+      <p class="err" id="err" role="alert"></p>
+      <button class="btn primary" id="submit" type="submit">Sign in</button>
+    </form>
+
+  </div>
+</main>
+
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/api.js"></script>
+<script src="js/login.js"></script>
+</body>
+</html>

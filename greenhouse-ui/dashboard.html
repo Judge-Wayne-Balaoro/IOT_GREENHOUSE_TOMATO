@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tomato Greenhouse</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Tomato Greenhouse</h1>
+      <div class="sub">Last updated: <span id="updated">--</span></div>
+    </div>
+    <div class="sp"></div>
+    <span class="wifi"><span class="dot" id="wifiDot"></span><span id="wifiTxt">Wi-Fi: --</span></span>
+    <span class="sub" id="who"></span>
+    <button class="btn" id="themeBtn" type="button">Theme</button>
+    <button class="btn" id="logout" type="button">Sign out</button>
+  </header>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <main>
+    <div class="hero">
+      <div class="panel tile hbig">
+        <div class="lbl">Plant height</div>
+        <div class="height">
+          <div class="ruler" id="ruler"><div class="plant" id="plant"></div></div>
+          <div style="align-self:flex-end">
+            <div class="val" id="v-height">--<small>cm</small></div>
+            <div class="sub">Official measurement from ruler</div>
+          </div>
+        </div>
+      </div>
+      <div class="grid sensors">
+        <div class="panel tile"><div class="lbl">Temperature</div><div class="val" id="v-temp">--<small>°C</small></div><div class="bar"><i id="b-temp" style="background:var(--c-temp)"></i></div></div>
+        <div class="panel tile"><div class="lbl">Humidity</div><div class="val" id="v-hum">--<small>%</small></div><div class="bar"><i id="b-hum" style="background:var(--c-hum)"></i></div></div>
+        <div class="panel tile"><div class="lbl">Soil moisture</div><div class="val" id="v-soil">--<small>%</small></div><div class="bar"><i id="b-soil" style="background:var(--c-soil)"></i></div></div>
+        <div class="panel tile"><div class="lbl">Light condition</div><div class="val light-value" id="v-light">--</div><div class="sub light-help">Digital threshold sensor</div></div>
+      </div>
+    </div>
+
+    <section class="panel growth-entry" aria-labelledby="growthEntryTitle">
+      <div class="growth-entry-head">
+        <div>
+          <h2 id="growthEntryTitle">Record Plant Height</h2>
+          <p class="sub">Measure from the soil surface to the highest point of the tomato plant using a ruler. These are the official growth records.</p>
+        </div>
+      </div>
+      <form id="growthForm" class="growth-form">
+        <label class="growth-field" for="heightCm"><span>Height (cm)</span><input id="heightCm" name="height_cm" type="number" min="0.1" max="300" step="0.1" placeholder="e.g. 6.4" required></label>
+        <label class="growth-field" for="heightDate"><span>Measurement date</span><input id="heightDate" name="recorded_at" type="date" required></label>
+        <label class="growth-field growth-notes" for="heightNotes"><span>Notes (optional)</span><input id="heightNotes" name="notes" type="text" maxlength="500" placeholder="e.g. 3rd week of monitoring"></label>
+        <button class="btn primary" id="saveHeight" type="submit">Save ruler measurement</button>
+      </form>
+      <p class="growth-status sub" id="growthFormStatus" role="status" aria-live="polite"></p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Measurement date</th><th>Height (cm)</th><th>Method</th><th>Notes</th></tr></thead>
+          <tbody id="manualGrowthRows"><tr><td colspan="4" class="sub">Loading ruler measurements…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <h2>Device status</h2>
+    <div class="grid devices" id="devices"></div>
+
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <h2 style="margin-right:auto">History</h2>
+      <div class="tabs" role="group" aria-label="Time range" id="range">
+        <button data-r="6" aria-pressed="false">6 h</button>
+        <button data-r="24" aria-pressed="true">24 h</button>
+        <button data-r="168" aria-pressed="false">7 days</button>
+      </div>
+    </div>
+    <div class="grid charts" id="charts"></div>
+
+    <h2>Previous readings</h2>
+    <div class="panel scroll">
+      <table>
+        <thead><tr><th>Timestamp</th><th>Temp (°C)</th><th>Humidity (%)</th><th>Soil (%)</th><th>Light condition</th><th>Height (cm)</th><th>Pump</th><th>Fan</th><th>Grow light</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+
+    <section class="panel ultrasonic-panel" aria-labelledby="ultrasonicTitle">
+      <div class="ultrasonic-head">
+        <div>
+          <h2 id="ultrasonicTitle">Ultrasonic Sensor Test</h2>
+          <p class="sub">Experimental values only. These measurements are kept separate and do not affect official ruler-based plant growth.</p>
+        </div>
+        <span class="experimental-pill">Experimental</span>
+      </div>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Timestamp</th><th>Distance (cm)</th><th>Estimated height (cm)</th><th>Classification</th></tr></thead>
+          <tbody id="ultrasonicRows"><tr><td colspan="4" class="sub">Loading experimental readings…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel export-footer" aria-label="Export monitoring data">
+      <div class="export-intro">
+        <div class="export-title-line">
+          <span class="export-icon" aria-hidden="true">↧</span>
+          <div>
+            <h2>Export monitoring data</h2>
+            <p class="sub">Build an Excel workbook for your project report or presentation.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="export-controls">
+        <div class="export-control-card">
+          <div class="export-card-title"><span class="step-number">1</span><span>Date range</span></div>
+          <label class="export-field" for="exportPeriod">
+            <span class="field-caption">Select monitoring period</span>
+            <select id="exportPeriod">
+              <option value="today">Today</option>
+              <option value="day">Specific day</option>
+              <option value="week" selected>Last 7 days</option>
+              <option value="month">Last 30 days</option>
+              <option value="custom">Custom date range</option>
+              <option value="all">All recorded data</option>
+            </select>
+          </label>
+          <label class="export-field conditional-date" id="exportDayField" for="exportDay" hidden>
+            <span class="field-caption">Choose day</span>
+            <input type="date" id="exportDay">
+          </label>
+          <div class="export-custom" id="exportCustomFields" hidden>
+            <label class="export-field" for="exportFrom">
+              <span class="field-caption">From date</span>
+              <input type="date" id="exportFrom">
+            </label>
+            <label class="export-field" for="exportTo">
+              <span class="field-caption">To date</span>
+              <input type="date" id="exportTo">
+            </label>
+          </div>
+          <p class="field-help">Choose a day, a preset period, or enter your own start and end dates.</p>
+        </div>
+
+        <div class="export-control-card">
+          <div class="export-card-title"><span class="step-number">2</span><span>Workbook contents</span></div>
+          <label class="export-field" for="exportFormat">
+            <span class="field-caption">Choose what to include</span>
+            <select id="exportFormat">
+              <option value="raw">Raw sensor readings</option>
+              <option value="daily">Daily summary (average, minimum, maximum)</option>
+              <option value="weekly">Weekly summary (average, minimum, maximum)</option>
+              <option value="both" selected>Raw readings + daily + weekly summaries</option>
+            </select>
+          </label>
+          <div class="worksheet-notes">
+            <div><span class="worksheet-dot"></span><span><strong>Raw readings</strong><small>Each recorded sensor measurement</small></span></div>
+            <div><span class="worksheet-dot"></span><span><strong>Summary sheets</strong><small>Average, minimum, and maximum values</small></span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="export-actions">
+        <p class="sub export-status" id="exportStatus" role="status" aria-live="polite">Exports up to 50,000 readings from the selected period.</p>
+        <button class="btn primary export-button" id="exportExcel" type="button"><span aria-hidden="true">↓</span> Export to Excel <span class="file-extension">.xlsx</span></button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/api.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="js/dashboard.js"></script>
+</body>
+</html>
