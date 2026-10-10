@@ -1,0 +1,4 @@
+# Add these to tomato_greenhouse_backend/.env; do not replace DATABASE_URL.
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=choose-your-own-password
+AUTH_SECRET=paste-a-random-secret-here
