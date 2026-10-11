@@ -114,7 +114,6 @@ If the initial deployment fails, open Render's service **Logs** and look for a m
    mpremote connect COM7 fs cp .\embedded\main.py :main.py
    mpremote connect COM7 fs cp .\embedded\greenhouse_secrets.py :greenhouse_secrets.py
    mpremote connect COM7 fs cp .\embedded\hcsr04.py :hcsr04.py
-   mpremote connect COM7 fs cp .\embedded\ssd1306.py :ssd1306.py
    mpremote connect COM7 fs cp .\embedded\i2c_lcd.py :i2c_lcd.py
    mpremote connect COM7 reset
    ```
