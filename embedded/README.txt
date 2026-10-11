@@ -1,19 +1,21 @@
-OLED standard driver test (ESP32-S3, 0.96-inch I2C 128x64)
+Embedded firmware: ESP32-S3, MicroPython, 16x2 I2C LCD
 
-Wiring assumed:
-VCC -> 3V3
-GND -> GND
-SDA -> GPIO 12
-SCK/SCL -> GPIO 13
-I2C address -> 0x3C
+Files to copy to the board:
+  main.py, i2c_lcd.py, hcsr04.py
+  greenhouse_secrets.py (private: copy greenhouse_secrets.py.example and fill it in)
 
-1) Back up your current ssd1306.py and oled_test.py.
-2) Copy these two files into C:\Users\Saibankan\Desktop\IOT\embedded, replacing the existing copies.
-3) Upload them to the ESP32:
-   mpremote connect COM7 fs cp .\ssd1306.py :ssd1306.py
-   mpremote connect COM7 fs cp .\oled_test.py :oled_test.py
-4) Run:
-   mpremote connect COM7 run .\oled_test.py
+Wiring:
+  LCD SDA -> GPIO 1, SCL -> GPIO 2 (address 0x27 or 0x3F is detected)
+  DHT11 -> GPIO 4, HC-SR04 TRIG 5 / ECHO 6, soil ADC GPIO 7, LDR digital GPIO 8
+  Relays: pump GPIO 9, fan GPIO 10, grow light GPIO 11
 
-Expected: white full-screen for 3 seconds, then text. This uses a standard SSD1306 init sequence and should also work with many SSD1315-compatible displays.
-If I2C scan returns 0x3C but the panel is still fully blank after this test, do not assume it is definitely defective yet; verify the exact module/pin mode and try the display on a known-good controller if possible.
+Upload (replace COM7):
+  mpremote connect COM7 fs cp main.py :main.py
+  mpremote connect COM7 fs cp i2c_lcd.py :i2c_lcd.py
+  mpremote connect COM7 fs cp hcsr04.py :hcsr04.py
+  mpremote connect COM7 fs cp greenhouse_secrets.py :greenhouse_secrets.py
+  mpremote connect COM7 reset
+
+Wi-Fi setup: with no saved network the board starts the hotspot "Greenhouse-Setup"
+(password greenhouse123). Join it and open http://192.168.4.1.
+To forget the saved network: mpremote connect COM7 fs rm wifi.json
