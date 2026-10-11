@@ -42,12 +42,12 @@ LIGHT_ON_HOUR = 6
 LIGHT_OFF_HOUR = 22
 
 # Plant height calibration
-SENSOR_TO_SOIL_CM = 80.0
+SENSOR_TO_SOIL_CM = None
 
 # Recording
 ENV_INTERVAL = 10  # test value; change to 300 later
 API_SELF_TEST = False  # disabled after API connectivity was verified
-HEIGHT_INTERVAL = 3600
+HEIGHT_INTERVAL = 60
 # Pending records remain here until the API acknowledges them.
 # The old /greenhouse_logs.jsonl archive is left untouched for compatibility.
 PENDING_FILE = "/greenhouse_pending.jsonl"
@@ -461,7 +461,7 @@ def read_ultrasonic():
 def plant_height(distance):
     if distance is None:
         return None
-    return round(max(0, SENSOR_TO_SOIL_CM - distance), 1)
+    return round(distance, 1)  # temporary: raw sensor distance, no subtraction
 
 
 # Pump
@@ -765,6 +765,10 @@ def post_json(path, data):
             # Treat only that explicit duplicate response as delivered.
             if status == 409 and "Event ID already exists" in response:
                 print("[API] Duplicate event already stored; treating as acknowledged")
+                return True
+
+            if status == 422:
+                print("[API] Rejected as invalid (422), dropping record:", response[-200:])
                 return True
 
             print("[API] Upload failed:", response[:200])
