@@ -7,17 +7,18 @@ import time
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
-
 from fastapi import FastAPI, Depends, HTTPException, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-
 from database import SessionLocal
 from models import (
     Greenhouse, Plant, EnvironmentReading, PlantGrowth,
-    ManualGrowthMeasurement, UltrasonicTest,
+    ManualGrowthMeasurement, UltrasonicTest
 )
-from schemas import EnvironmentReadingCreate, PlantGrowthCreate, ManualGrowthCreate, UltrasonicTestCreate, LoginRequest
+from schemas import (
+    EnvironmentReadingCreate, PlantGrowthCreate, ManualGrowthCreate,
+    UltrasonicTestCreate, LoginRequest, LiveTelemetryPayload
+)
 
 app = FastAPI(title="Tomato Greenhouse API", version="2.0.0")
 
@@ -33,7 +34,6 @@ app.add_middleware(
 
 TOKEN_LIFETIME_SECONDS = 8 * 60 * 60
 
-
 def get_db():
     db = SessionLocal()
     try:
@@ -41,10 +41,8 @@ def get_db():
     finally:
         db.close()
 
-
 def _b64(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
-
 
 def _sign(payload: str) -> str:
     secret = os.getenv("AUTH_SECRET", "")
@@ -52,11 +50,9 @@ def _sign(payload: str) -> str:
         raise HTTPException(status_code=503, detail="Set AUTH_SECRET (at least 32 characters) in your backend .env before using login.")
     return _b64(hmac.new(secret.encode("utf-8"), payload.encode("ascii"), hashlib.sha256).digest())
 
-
 def _make_token(username: str) -> str:
     payload = _b64(json.dumps({"sub": username, "exp": int(time.time()) + TOKEN_LIFETIME_SECONDS}, separators=(",", ":")).encode("utf-8"))
     return payload + "." + _sign(payload)
-
 
 def require_device_key(x_device_key: str | None = Header(default=None)) -> bool:
     """Protect public ESP32 ingest routes with a shared device key."""
@@ -66,7 +62,6 @@ def require_device_key(x_device_key: str | None = Header(default=None)) -> bool:
     if not x_device_key or not hmac.compare_digest(x_device_key, expected):
         raise HTTPException(status_code=401, detail="Invalid device key.")
     return True
-
 
 def require_user(authorization: str | None = Header(default=None)) -> dict:
     if not authorization or not authorization.startswith("Bearer "):
@@ -90,7 +85,6 @@ def require_user(authorization: str | None = Header(default=None)) -> dict:
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid sign-in token.")
 
-
 def _apply_date_filters(query, column, start_date, end_date):
     if start_date is not None:
         query = query.filter(column >= start_date)
@@ -98,16 +92,13 @@ def _apply_date_filters(query, column, start_date, end_date):
         query = query.filter(column <= end_date)
     return query
 
-
 @app.get("/")
 def root():
     return {"message": "Tomato Greenhouse API is running", "version": "2.0.0"}
 
-
 @app.get("/health")
 def health():
     return {"status": "ok"}
-
 
 @app.get("/db-check")
 def db_check():
@@ -117,7 +108,6 @@ def db_check():
         return {"database": "connected"}
     except Exception as exc:
         return {"database": "connection failed", "error": str(exc)}
-
 
 @app.post("/auth/login")
 def login(payload: LoginRequest):
@@ -130,6 +120,74 @@ def login(payload: LoginRequest):
     token = _make_token(payload.username)
     return {"access_token": token, "token_type": "bearer", "user": {"username": payload.username, "name": "Administrator"}}
 
+# ---------- Real-time live telemetry endpoints (In-memory, unauthenticated for ESP32 push) ----------
+_LIVE_STATE: dict[int, dict] = {}
+
+@app.post("/api/live")
+def update_live_state(payload: LiveTelemetryPayload, _device_ok: bool = Depends(require_device_key)):
+    now_utc = datetime.now(timezone.utc)
+    _LIVE_STATE[payload.greenhouse_id] = {
+        "greenhouse_id": payload.greenhouse_id,
+        "recorded_at": payload.recorded_at or now_utc,
+        "server_received_at": now_utc,
+        "temperature_c": payload.temperature_c,
+        "humidity_percent": payload.humidity_percent,
+        "soil_moisture_percent": payload.soil_moisture_percent,
+        "light_level": payload.light_level,
+        "pump_status": payload.pump_status,
+        "fan_status": payload.fan_status,
+        "grow_light_status": payload.grow_light_status,
+    }
+    return {"status": "ok"}
+
+@app.get("/api/live")
+def get_live_state(
+    greenhouse_id: int = 6,
+    _user: dict = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    live = _LIVE_STATE.get(greenhouse_id)
+    if live:
+        age = max(0, int((datetime.now(timezone.utc) - live["server_received_at"]).total_seconds()))
+        return {
+            **live,
+            "wifi_connected": age <= 20,
+            "age_seconds": age,
+        }
+
+    reading = (
+        db.query(EnvironmentReading)
+        .filter(EnvironmentReading.greenhouse_id == greenhouse_id)
+        .order_by(EnvironmentReading.recorded_at.desc())
+        .first()
+    )
+    if not reading:
+        raise HTTPException(status_code=404, detail="No readings found")
+    return {
+        **_reading_dict(reading),
+        "wifi_connected": False,
+        "age_seconds": None,
+    }
+
+@app.get("/device/status")
+def device_status(greenhouse_id: int = 6, _user: dict = Depends(require_user), db: Session = Depends(get_db)):
+    live = _LIVE_STATE.get(greenhouse_id)
+    if live:
+        age = max(0, int((datetime.now(timezone.utc) - live["server_received_at"]).total_seconds()))
+        return {
+            "wifi_connected": age <= 20,
+            "last_seen_at": live["server_received_at"],
+            "age_seconds": age,
+        }
+
+    reading = db.query(EnvironmentReading).order_by(EnvironmentReading.recorded_at.desc()).first()
+    if not reading:
+        return {"wifi_connected": False, "last_seen_at": None, "age_seconds": None}
+    stamp = reading.recorded_at
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    age = max(0, int((datetime.now(timezone.utc) - stamp.astimezone(timezone.utc)).total_seconds()))
+    return {"wifi_connected": age <= 20, "last_seen_at": reading.recorded_at, "age_seconds": age}
 
 # ---------- Environment readings: ESP32 ingest remains unauthenticated ----------
 @app.post("/api/readings")
@@ -143,7 +201,6 @@ def create_reading(reading: EnvironmentReadingCreate, _device_ok: bool = Depends
     db.commit()
     db.refresh(new_reading)
     return {"message": "Reading saved", "id": new_reading.id, "event_id": new_reading.event_id}
-
 
 @app.get("/api/readings")
 def get_readings(
@@ -161,7 +218,6 @@ def get_readings(
     rows = query.order_by(EnvironmentReading.recorded_at.desc()).limit(limit).all()
     return [_reading_dict(r) for r in rows]
 
-
 def _reading_dict(r: EnvironmentReading) -> dict:
     return {
         "id": r.id, "event_id": r.event_id, "greenhouse_id": r.greenhouse_id,
@@ -170,7 +226,6 @@ def _reading_dict(r: EnvironmentReading) -> dict:
         "light_level": r.light_level, "pump_status": r.pump_status,
         "fan_status": r.fan_status, "grow_light_status": r.grow_light_status,
     }
-
 
 @app.get("/api/readings/latest")
 def get_latest_reading(
@@ -185,19 +240,6 @@ def get_latest_reading(
     if not reading:
         raise HTTPException(status_code=404, detail="No readings found")
     return _reading_dict(reading)
-
-
-@app.get("/device/status")
-def device_status(_user: dict = Depends(require_user), db: Session = Depends(get_db)):
-    reading = db.query(EnvironmentReading).order_by(EnvironmentReading.recorded_at.desc()).first()
-    if not reading:
-        return {"wifi_connected": False, "last_seen_at": None, "age_seconds": None}
-    stamp = reading.recorded_at
-    if stamp.tzinfo is None:
-        stamp = stamp.replace(tzinfo=timezone.utc)
-    age = max(0, int((datetime.now(timezone.utc) - stamp.astimezone(timezone.utc)).total_seconds()))
-    return {"wifi_connected": age <= 600, "last_seen_at": reading.recorded_at, "age_seconds": age}
-
 
 # ---------- Official ruler measurements: used by dashboard/chart/export ----------
 @app.post("/api/growth/manual")
@@ -216,11 +258,9 @@ def create_manual_growth(data: ManualGrowthCreate, _user: dict = Depends(require
     db.refresh(record)
     return _manual_growth_dict(record)
 
-
 def _manual_growth_dict(r: ManualGrowthMeasurement) -> dict:
     return {"id": r.id, "event_id": r.event_id, "plant_id": r.plant_id, "recorded_at": r.recorded_at,
             "height_cm": r.height_cm, "notes": r.notes, "method": "ruler"}
-
 
 @app.get("/api/growth/manual")
 def get_manual_growth(
@@ -238,7 +278,6 @@ def get_manual_growth(
     rows = query.order_by(ManualGrowthMeasurement.recorded_at.desc()).limit(limit).all()
     return [_manual_growth_dict(r) for r in rows]
 
-
 @app.get("/api/growth/manual/latest")
 def get_latest_manual_growth(plant_id: int | None = None, _user: dict = Depends(require_user), db: Session = Depends(get_db)):
     query = db.query(ManualGrowthMeasurement)
@@ -248,7 +287,6 @@ def get_latest_manual_growth(plant_id: int | None = None, _user: dict = Depends(
     if not row:
         raise HTTPException(status_code=404, detail="No ruler measurements have been recorded yet")
     return _manual_growth_dict(row)
-
 
 # ---------- Experimental ultrasonic readings: kept separate from official growth ----------
 @app.post("/api/ultrasonic-tests")
@@ -267,12 +305,10 @@ def create_ultrasonic_test(data: UltrasonicTestCreate, _device_ok: bool = Depend
     db.refresh(row)
     return _ultrasonic_dict(row)
 
-
 def _ultrasonic_dict(r: UltrasonicTest) -> dict:
     return {"id": r.id, "event_id": r.event_id, "plant_id": r.plant_id, "recorded_at": r.recorded_at,
             "distance_cm": r.distance_cm, "estimated_height_cm": r.estimated_height_cm,
             "classification": "experimental - not official plant height"}
-
 
 @app.get("/api/ultrasonic-tests")
 def get_ultrasonic_tests(
@@ -290,7 +326,6 @@ def get_ultrasonic_tests(
     rows = query.order_by(UltrasonicTest.recorded_at.desc()).limit(limit).all()
     return [_ultrasonic_dict(r) for r in rows]
 
-
 # ---------- Legacy endpoints kept for older clients/data; not used for official chart ----------
 @app.post("/api/growth")
 def create_legacy_growth(growth: PlantGrowthCreate, _device_ok: bool = Depends(require_device_key), db: Session = Depends(get_db)):
@@ -303,7 +338,6 @@ def create_legacy_growth(growth: PlantGrowthCreate, _device_ok: bool = Depends(r
     db.commit()
     db.refresh(record)
     return {"message": "Legacy growth record saved", "id": record.id, "event_id": record.event_id}
-
 
 @app.get("/api/growth")
 def get_legacy_growth(
@@ -318,7 +352,6 @@ def get_legacy_growth(
     rows = query.order_by(PlantGrowth.recorded_at.desc()).limit(limit).all()
     return [{"id": r.id, "event_id": r.event_id, "plant_id": r.plant_id, "recorded_at": r.recorded_at,
              "height_cm": r.height_cm, "classification": "legacy - not official ruler measurement"} for r in rows]
-
 
 @app.get("/api/growth/latest")
 def get_legacy_latest_growth(plant_id: int | None = None, _user: dict = Depends(require_user), db: Session = Depends(get_db)):
