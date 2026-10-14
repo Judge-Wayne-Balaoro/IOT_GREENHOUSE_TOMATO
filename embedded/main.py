@@ -6,7 +6,7 @@ from hcsr04 import HCSR04
 from i2c_lcd import I2cLcd
 
 # GPIO
-LCD_SDA, LCD_SCL = 1, 2
+LCD_SDA, LCD_SCL = 15, 16
 DHT_PIN = 4
 US_TRIG, US_ECHO = 5, 6
 SOIL_PIN, LDR_PIN = 7, 8
@@ -29,7 +29,7 @@ SOIL_WET_RAW = 1500
 SOIL_PUMP_ON = 40
 PUMP_RUN_TIME = 5
 PUMP_COOLDOWN = 300
-PUMP_AUTO_ENABLED = False  # keep False until soil calibration is verified
+PUMP_AUTO_ENABLED = True  # keep False until soil calibration is verified
 SOIL_RAW_MIN_VALID = 100  # raw ADC outside this range is treated as a sensor fault
 SOIL_RAW_MAX_VALID = 4090
 
@@ -45,9 +45,9 @@ LIGHT_OFF_HOUR = 22
 SENSOR_TO_SOIL_CM = None
 
 # Recording
-ENV_INTERVAL = 10  # test value; change to 300 later
+ENV_INTERVAL = 300  # test value; change to 300 later
 API_SELF_TEST = False  # disabled after API connectivity was verified
-HEIGHT_INTERVAL = 60
+HEIGHT_INTERVAL = 3600
 # Pending records remain here until the API acknowledges them.
 # The old /greenhouse_logs.jsonl archive is left untouched for compatibility.
 PENDING_FILE = "/greenhouse_pending.jsonl"
