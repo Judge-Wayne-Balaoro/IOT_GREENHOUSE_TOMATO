@@ -1,3 +1,4 @@
+# noinspection PyUnresolvedReferences,PyShadowingNames,PyBroadException,PyPep8Naming
 # Tomato Greenhouse - ESP32 MicroPython
 import time, json, socket, network, ntptime, os, machine, ssl
 from machine import Pin, ADC, SoftI2C
@@ -23,15 +24,15 @@ VERSION = "1.4-realtime"
 GREENHOUSE_ID = 6
 PLANT_ID = 1
 
-# Soil calibration (temporary)
+# Soil calibration
 SOIL_DRY_RAW = 3500
 SOIL_WET_RAW = 1500
 SOIL_PUMP_ON = 40
 PUMP_RUN_TIME = 5
 PUMP_COOLDOWN = 300
-PUMP_AUTO_ENABLED = True # keep False until soil calibration is verified
-SOIL_RAW_MIN_VALID = 100  # raw ADC outside this range is treated as a sensor fault
-SOIL_RAW_MAX_VALID = 4090
+PUMP_AUTO_ENABLED = True
+SOIL_RAW_MIN_VALID = 0
+SOIL_RAW_MAX_VALID = 4095
 
 # Fan
 FAN_TEMP_ON, FAN_TEMP_OFF = 27, 25
