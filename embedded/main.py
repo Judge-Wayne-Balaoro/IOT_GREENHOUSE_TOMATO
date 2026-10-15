@@ -1,4 +1,3 @@
-# noinspection PyUnresolvedReferences,PyShadowingNames,PyBroadException,PyPep8Naming
 # Tomato Greenhouse - ESP32 MicroPython
 import time, json, socket, network, ntptime, os, machine, ssl
 from machine import Pin, ADC, SoftI2C
@@ -469,7 +468,8 @@ def control_light():
 
 # LCD display
 def _lcd_line(text):
-    return str(text)[:16].ljust(16)
+    s = str(text)[:16]
+    return s + (" " * (16 - len(s)))
 
 def update_lcd(temp, hum, soil, light):
     global lcd_page, lcd_last_page_tick
