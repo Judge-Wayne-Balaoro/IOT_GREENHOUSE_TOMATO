@@ -1,6 +1,13 @@
 # Tomato Greenhouse - ESP32 MicroPython
-import time, json, socket, network, ntptime, os, machine, ssl
-from machine import Pin, ADC, SoftI2C
+import json
+import machine
+import network
+import ntptime
+import os
+import socket
+import ssl
+import time
+from machine import ADC, Pin, SoftI2C
 import dht
 from hcsr04 import HCSR04
 from i2c_lcd import I2cLcd
@@ -12,20 +19,19 @@ US_TRIG, US_ECHO = 5, 6
 SOIL_PIN, LDR_PIN = 7, 8
 PUMP_RELAY, FAN_RELAY, LIGHT_RELAY = 9, 10, 11
 
-# Relay polarity differs per module. Verify each one before connecting a real load.
-PUMP_ON, PUMP_OFF = 0, 1  # pump relay: active-low
-FAN_ON, FAN_OFF = 1, 0  # fan relay: active-high
-LIGHT_ON, LIGHT_OFF = 1, 0  # grow-light relay: active-high
+PUMP_ON, PUMP_OFF = 0, 1  # Active-low relay
+FAN_ON, FAN_OFF = 1, 0  # Active-high relay
+LIGHT_ON, LIGHT_OFF = 1, 0  # Active-high relay
 
-VERSION = "1.4-realtime"
+VERSION = "1.5.2"
 
 # IDs
 GREENHOUSE_ID = 6
 PLANT_ID = 1
 
 # Soil calibration
-SOIL_DRY_RAW = 3500
-SOIL_WET_RAW = 1500
+SOIL_DRY_RAW = 2879
+SOIL_WET_RAW = 1237
 SOIL_PUMP_ON = 40
 PUMP_RUN_TIME = 5
 PUMP_COOLDOWN = 300
@@ -42,15 +48,15 @@ LIGHT_ON_HOUR = 6
 LIGHT_OFF_HOUR = 22
 
 # Plant height calibration
-SENSOR_TO_SOIL_CM = None
+SENSOR_TO_SOIL_CM = 15.5
 
 # Recording
-ENV_INTERVAL = 300       # 5 minutes for official database logs and Excel export
-LIVE_INTERVAL = 5        # 5 seconds for real-time dashboard cards & Wi-Fi heartbeat
-API_SELF_TEST = False
+ENV_INTERVAL = 300
+LIVE_INTERVAL = 5
 HEIGHT_INTERVAL = 3600
+SITE_UPLOAD_ENABLED = True
 
-# Pending records remain here until the API acknowledges them.
+# Persistent offline queue
 PENDING_FILE = "/greenhouse_pending.jsonl"
 PENDING_TMP_FILE = "/greenhouse_pending.tmp"
 PENDING_BACKUP_FILE = "/greenhouse_pending.bak"
@@ -58,7 +64,7 @@ SYNC_INTERVAL = 5
 SYNC_BATCH_SIZE = 5
 MAX_QUEUE_BYTES = 300000
 
-# Public HTTPS backend configuration is stored in greenhouse_secrets.py.
+# API credentials are kept in greenhouse_secrets.py.
 try:
     import greenhouse_secrets as _gh_secrets
     API_HOST = _gh_secrets.API_HOST
@@ -70,7 +76,7 @@ except Exception as _secrets_error:
     API_PORT = 443
     API_USE_TLS = True
     DEVICE_API_KEY = "REPLACE_WITH_THE_DEVICE_API_KEY_FROM_RENDER"
-    print("[CONFIG ERROR] Create embedded/greenhouse_secrets.py from the example before deployment:", _secrets_error)
+    print("[CONFIG ERROR] greenhouse_secrets.py:", _secrets_error)
 
 API_HOST = API_HOST.strip().replace("https://", "").replace("http://", "").strip("/")
 print("[CONFIG] API host:", API_HOST)
@@ -135,6 +141,7 @@ light_relay.value(LIGHT_OFF)
 
 # State
 pump_state = False
+pump_activated_since_env = False  # Track brief pump cycles for history.
 fan_state = False
 grow_light_state = False
 pump_start = 0
@@ -143,7 +150,6 @@ last_env = time.ticks_ms()
 last_live = time.ticks_ms()
 last_height = time.ticks_ms()
 last_wifi_attempt = time.ticks_ms()
-api_test_attempted = False
 last_sync_attempt = time.ticks_ms()
 event_counter = 0
 last_time_attempt = time.ticks_ms()
@@ -166,7 +172,7 @@ def load_wifi():
         with open(WIFI_FILE, "r") as f:
             d = json.load(f)
         return d.get("ssid"), d.get("password", "")
-    except:
+    except Exception:
         return None, None
 
 def connect_wifi(timeout=15):
@@ -176,7 +182,7 @@ def connect_wifi(timeout=15):
     sta.active(True)
     try:
         sta.disconnect()
-    except:
+    except Exception:
         pass
     time.sleep(1)
     try:
@@ -234,13 +240,13 @@ def current_hour():
 def scan_wifi():
     try:
         nets = sta.scan()
-    except:
+    except Exception:
         return []
     found = {}
     for n in nets:
         try:
             ssid = n[0].decode("utf-8", "ignore")
-        except:
+        except Exception:
             ssid = ""
         if ssid:
             if ssid not in found or n[3] > found[ssid]:
@@ -256,7 +262,7 @@ def url_decode(v):
             try:
                 out += chr(int(v[i + 1:i + 3], 16))
                 i += 3
-            except:
+            except Exception:
                 out += v[i]
                 i += 1
         else:
@@ -341,7 +347,7 @@ def start_setup_mode():
             print("[WIFI SETUP ERROR]", e)
         try:
             client.close()
-        except:
+        except Exception:
             pass
     server.close()
     ap.active(False)
@@ -384,10 +390,15 @@ def read_dht():
 
 def read_soil():
     try:
-        raw = soil_adc.read()
-        if raw < SOIL_RAW_MIN_VALID or raw > SOIL_RAW_MAX_VALID:
-            return None
-        return raw
+        samples = []
+        for _ in range(5):
+            samples.append(soil_adc.read())
+            time.sleep_ms(10)
+        samples.sort()
+        raw = samples[len(samples) // 2]
+        if SOIL_RAW_MIN_VALID <= raw <= SOIL_RAW_MAX_VALID:
+            return raw
+        return None
     except Exception as e:
         print("[SOIL ERROR]", e)
         return None
@@ -418,13 +429,15 @@ def read_ultrasonic():
         return None
 
 def plant_height(distance):
-    if distance is None:
+    if distance is None or SENSOR_TO_SOIL_CM is None:
         return None
-    return round(distance, 1)
+
+    height = SENSOR_TO_SOIL_CM - distance
+    return round(max(0, height), 1)
 
 # Pump
 def control_pump(soil):
-    global pump_state, pump_start, pump_cooldown_until
+    global pump_state, pump_start, pump_cooldown_until, pump_activated_since_env
     now = time.ticks_ms()
     if pump_state:
         if time.ticks_diff(now, pump_start) >= PUMP_RUN_TIME * 1000:
@@ -439,7 +452,8 @@ def control_pump(soil):
         pump_relay.value(PUMP_ON)
         pump_state = True
         pump_start = now
-        print("[PUMP] ON")
+        pump_activated_since_env = True
+        print("[PUMP] ON (will be recorded in the next 5-minute history row)")
         return True
     pump_relay.value(PUMP_OFF)
     return False
@@ -601,7 +615,7 @@ def build_environment_payload(temp, hum, soil, light):
         "humidity_percent": hum,
         "soil_moisture_percent": soil,
         "light_level": light,
-        "pump_status": pump_state,
+        "pump_status": bool(pump_state or pump_activated_since_env),
         "fan_status": fan_state,
         "grow_light_status": grow_light_state
     }
@@ -631,7 +645,7 @@ def post_json(path, data):
     try:
         body = json.dumps(data)
         body_bytes = body.encode()
-        host_header = API_HOST if API_PORT in (80, 443) else API_HOST + ":" + str(API_PORT)
+        host_header = API_HOST if API_PORT in (80, 443) else "{}:{}".format(API_HOST, API_PORT)
         request = (
             "POST " + path + " HTTP/1.1\r\n"
             "Host: " + host_header + "\r\n"
@@ -672,8 +686,10 @@ def post_json(path, data):
                 status = int(status_line.split()[1])
             except Exception:
                 return False
-            if 200 <= status < 300 or (status == 409 and "Event ID already exists" in response) or status == 422:
+            if 200 <= status < 300 or (status == 409 and "Event ID already exists" in response):
                 return True
+            detail = response.split("\r\n\r\n", 1)[-1]
+            print("[API HTTP ERROR]", path, status, detail[:180])
             return False
         finally:
             try:
@@ -745,7 +761,10 @@ def sync_pending_records():
             source.close()
             target.close()
         if delivered:
-            commit_queue_temp()
+            if commit_queue_temp():
+                print("[QUEUE] Synced", delivered, "record(s) to the API")
+            else:
+                print("[QUEUE] Delivered records, but queue cleanup failed")
         else:
             remove_file(PENDING_TMP_FILE)
         return delivered
@@ -757,6 +776,7 @@ def sync_pending_records():
 # Boot
 recover_queue_files()
 print("[BOOT] Greenhouse main.py v" + VERSION)
+print("[UPLOAD] Site uploads:", "ENABLED" if SITE_UPLOAD_ENABLED else "PAUSED")
 wifi_connected = initialize_wifi()
 print("Wi-Fi:", "CONNECTED" if wifi_connected else "OFFLINE")
 
@@ -794,28 +814,33 @@ while True:
             "| WiFi:", sta.isconnected()
         )
 
-        # 1. Real-time live status push every 5 seconds (In-memory, unauthenticated for dashboard heartbeat)
         now = time.ticks_ms()
-        if sta.isconnected() and time.ticks_diff(now, last_live) >= LIVE_INTERVAL * 1000:
+        if (SITE_UPLOAD_ENABLED and sta.isconnected() and
+                time.ticks_diff(now, last_live) >= LIVE_INTERVAL * 1000):
             last_live = now
             send_live_status(temp, hum, soil, light)
 
-        # 2. Official database environmental logging every 5 minutes (stored to PostgreSQL / Excel export)
         now = time.ticks_ms()
-        if time_ok() and time.ticks_diff(now, last_env) >= ENV_INTERVAL * 1000:
+        if (SITE_UPLOAD_ENABLED and time_ok() and
+                time.ticks_diff(now, last_env) >= ENV_INTERVAL * 1000):
             print("[QUEUE] Capturing 5-min environmental reading...")
-            queue_environment(temp, hum, soil, light)
+            queued = queue_environment(temp, hum, soil, light)
+            if queued:
+                pump_activated_since_env = False
+                print("[QUEUE] Environmental reading stored; pump event flag reset")
+            else:
+                print("[QUEUE] Environmental reading was not stored; preserving pump event flag")
             last_env = time.ticks_ms()
 
-        # 3. Ultrasonic test recording every 1 hour
         now = time.ticks_ms()
-        if time_ok() and time.ticks_diff(now, last_height) >= HEIGHT_INTERVAL * 1000:
+        if (SITE_UPLOAD_ENABLED and time_ok() and
+                time.ticks_diff(now, last_height) >= HEIGHT_INTERVAL * 1000):
             queue_growth(height, distance)
             last_height = time.ticks_ms()
 
-        # 4. Sync pending records
         now = time.ticks_ms()
-        if time.ticks_diff(now, last_sync_attempt) >= SYNC_INTERVAL * 1000:
+        if (SITE_UPLOAD_ENABLED and
+                time.ticks_diff(now, last_sync_attempt) >= SYNC_INTERVAL * 1000):
             last_sync_attempt = now
             if sta.isconnected() and not pump_state:
                 sync_pending_records()
