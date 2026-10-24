@@ -44,28 +44,6 @@
       </div>
     </div>
 
-    <section class="panel growth-entry" aria-labelledby="growthEntryTitle">
-      <div class="growth-entry-head">
-        <div>
-          <h2 id="growthEntryTitle">Record Plant Height</h2>
-          <p class="sub">Measure from the soil surface to the highest point of the tomato plant using a ruler. These are the official growth records.</p>
-        </div>
-      </div>
-      <form id="growthForm" class="growth-form">
-        <label class="growth-field" for="heightCm"><span>Height (cm)</span><input id="heightCm" name="height_cm" type="number" min="0.1" max="300" step="0.1" placeholder="e.g. 6.4" required></label>
-        <label class="growth-field" for="heightDate"><span>Measurement date</span><input id="heightDate" name="recorded_at" type="date" required></label>
-        <label class="growth-field growth-notes" for="heightNotes"><span>Notes (optional)</span><input id="heightNotes" name="notes" type="text" maxlength="500" placeholder="e.g. 3rd week of monitoring"></label>
-        <button class="btn primary" id="saveHeight" type="submit">Save ruler measurement</button>
-      </form>
-      <p class="growth-status sub" id="growthFormStatus" role="status" aria-live="polite"></p>
-      <div class="scroll">
-        <table>
-          <thead><tr><th>Measurement date</th><th>Height (cm)</th><th>Method</th><th>Notes</th></tr></thead>
-          <tbody id="manualGrowthRows"><tr><td colspan="4" class="sub">Loading ruler measurements…</td></tr></tbody>
-        </table>
-      </div>
-    </section>
-
     <h2>Device status</h2>
     <div class="grid devices" id="devices"></div>
 
@@ -99,6 +77,28 @@
         <table>
           <thead><tr><th>Timestamp</th><th>Distance (cm)</th><th>Estimated height (cm)</th><th>Classification</th></tr></thead>
           <tbody id="ultrasonicRows"><tr><td colspan="4" class="sub">Loading experimental readings…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel growth-entry" aria-labelledby="growthEntryTitle">
+      <div class="growth-entry-head">
+        <div>
+          <h2 id="growthEntryTitle">Record Plant Height</h2>
+          <p class="sub">Measure from the soil surface to the highest point of the tomato plant using a ruler. These are the official growth records.</p>
+        </div>
+      </div>
+      <form id="growthForm" class="growth-form">
+        <label class="growth-field" for="heightCm"><span>Height (cm)</span><input id="heightCm" name="height_cm" type="number" min="0.1" max="300" step="0.1" placeholder="e.g. 6.4" required></label>
+        <label class="growth-field" for="heightDate"><span>Measurement date</span><input id="heightDate" name="recorded_at" type="date" required></label>
+        <label class="growth-field growth-notes" for="heightNotes"><span>Notes (optional)</span><input id="heightNotes" name="notes" type="text" maxlength="500" placeholder="e.g. 3rd week of monitoring"></label>
+        <button class="btn primary" id="saveHeight" type="submit">Save ruler measurement</button>
+      </form>
+      <p class="growth-status sub" id="growthFormStatus" role="status" aria-live="polite"></p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Measurement date</th><th>Height (cm)</th><th>Method</th><th>Notes</th></tr></thead>
+          <tbody id="manualGrowthRows"><tr><td colspan="4" class="sub">Loading ruler measurements…</td></tr></tbody>
         </table>
       </div>
     </section>
