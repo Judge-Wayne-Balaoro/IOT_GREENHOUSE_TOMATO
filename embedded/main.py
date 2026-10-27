@@ -38,6 +38,9 @@ PUMP_COOLDOWN = 300
 PUMP_AUTO_ENABLED = True
 SOIL_RAW_MIN_VALID = 0
 SOIL_RAW_MAX_VALID = 4095
+SOIL_POWER_PIN = 12
+soil_power = Pin(SOIL_POWER_PIN, Pin.OUT)
+soil_power.value(0)
 
 # Fan
 FAN_TEMP_ON, FAN_TEMP_OFF = 27, 25
@@ -388,19 +391,24 @@ def read_dht():
         print("[DHT ERROR]", e)
         return None, None
 
+
 def read_soil():
     try:
+        soil_power.value(1)  # 1. Turn on GPIO 12 to energize the sensor
+        time.sleep_ms(50)  # 2. Wait 50ms for the voltage to stabilize
+
         samples = []
         for _ in range(5):
             samples.append(soil_adc.read())
-            time.sleep_ms(10)
+            time.sleep_ms(10)  # Small delay between ADC samples
+
+        soil_power.value(0)  # 3. Turn off GPIO 12 to prevent corrosion[cite: 21]
+
         samples.sort()
-        raw = samples[len(samples) // 2]
-        if SOIL_RAW_MIN_VALID <= raw <= SOIL_RAW_MAX_VALID:
-            return raw
-        return None
+        raw = samples[len(samples) // 2]  # Take the median sample
+        return raw
     except Exception as e:
-        print("[SOIL ERROR]", e)
+        soil_power.value(0)  # Fail-safe: ensure power cuts off if an error occurs
         return None
 
 def soil_percent(raw):
